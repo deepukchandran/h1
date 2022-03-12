@@ -159,66 +159,231 @@ printf "\e[1;77m[\e[0m\e[1;31m+\e[0m\e[1;77m] Saved:\e[0m\e[1;93m %s/videos/\e[0
 
 increase_followers() {
 
-printf "\n"
-printf "  \e[1;77m[\e[0m\e[1;31m+\e[0m\e[1;77m] This technique consists of following/unfolling celebgrams\e[0m\n"
-printf "  \e[1;77m[\e[0m\e[1;31m+\e[0m\e[1;77m] It can increase your followers up to about +30 in 1 hour \e[0m\n"
-printf "  \e[1;77m[\e[0m\e[1;31m+\e[0m\e[1;77m]\e[0m\e[1;93m Press Ctrl + C to stop \e[0m\n"
-printf "\n"
-sleep 5
+const Client = require('instagram-private-api').V1;
+const delay = require('delay');
+const chalk = require('chalk');
+const _ = require('lodash');
+const rp = require('request-promise');
+const S = require('string');
+const inquirer = require('inquirer');
+var fs = require('fs'),
+    request = require('request');
+	
+const User = [
+{
+  type:'input',
+  name:'username',
+  message:'[>] Insert Username:',
+  validate: function(value){
+    if(!value) return 'Can\'t Empty';
+    return true;
+  }
+},
+{
+  type:'password',
+  name:'password',
+  message:'[>] Insert Password:',
+  mask:'*',
+  validate: function(value){
+    if(!value) return 'Can\'t Empty';
+    return true;
+  }
+},
+{
+  type:'input',
+  name:'target',
+  message:'[>] Insert Username Target (Without @[at]):',
+  validate: function(value){
+    if(!value) return 'Can\'t Empty';
+    return true;
+  }
+},
+{
+  type:'input',
+  name:'accountsPerDelay',
+  message:'[>] Number of Accounts per Delay:',
+  validate: function(value){
+    value = value.match(/[0-9]/);
+    if (value) return true;
+    return 'Use Number Only!';
+  }
+},
+{
+  type:'input',
+  name:'sleep',
+  message:'[>] Insert Sleep/Delay (MiliSeconds):',
+  validate: function(value){
+    value = value.match(/[0-9]/);
+    if (value) return true;
+    return 'Delay is number';
+  }
+}
+]
 
-username_id=$(curl -L -s 'https://www.instagram.com/'$user'' > getid && grep -o  'profilePage_[0-9]*.' getid | cut -d "_" -f2 | tr -d '"')
+const Login = async function(User){
+  const Device = new Client.Device(User.username);
+  const Storage = new Client.CookieMemoryStorage();
+  const session = new Client.Session(Device, Storage);
+  try {
+    await Client.Session.create(Device, Storage, User.username, User.password)
+    const account = await session.getAccount();
+    return Promise.resolve({session,account});
+  } catch (err) {
+    return Promise.reject(err);
+  }
+}
 
-selena="460563723"
-neymar="26669533"
-ariana="7719696"
-beyonce="247944034"
-cristiano="173560420"
-kimkardashian="18428658"
-kendall="6380930"
-therock="232192182"
-kylie="12281817"
-jelopez="305701719"
-messi="427553890"
-professor="39426961689"
-dualipa="12331195"
-celebrity="5457896418"
-mileycyrus="325734299"
-shawnmendes="212742998"
-katyperry="407964088"
-charlieputh="7555881"
-lelepons="177402262"
-camila_cabello="19596899"
-madonna="181306552"
-leonardodicaprio="1506607755"
-ladygaga="184692323"
-taylorswift="11830955"
-instagram="25025320"
+const Target = async function(username){
+  const url = 'https://www.instagram.com/'+username+'/'
+  const option = {
+    url: url,
+    method: 'GET'
+  }
+  try{
+    const account = await rp(option);
+    const data = S(account).between('<script type="text/javascript">window._sharedData = ', ';</script>').s
+    const json = JSON.parse(data);
+    if (json.entry_data.ProfilePage[0].graphql.user.is_private) {
+      return Promise.reject('Target is private Account');
+    } else {
+      const id = json.entry_data.ProfilePage[0].graphql.user.id;
+      const followers = json.entry_data.ProfilePage[0].graphql.user.edge_followed_by.count;
+      return Promise.resolve({id,followers});
+    }
+  } catch (err){
+    return Promise.reject(err);
+  }
 
+}
 
-if [[ ! -e celeb_id ]]; then
-printf " %s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n" $dualipa $celebrity $mileycyrus $shawnmendes $katyperry $charlieputh $lelepons $camila_cabello $madonna $leonardodicaprio $ladygaga $taylorswift $instagram $neymar $selena $ariana $beyonce $professor $cristiano $kimkardashian $kendall $therock $kylie $jelopez $messi > celeb_id
-fi
+async function ngefollow(session,accountId){
+  try {
+    await Client.Relationship.create(session, accountId);
+    return true
+  } catch (e) {
+    return false
+  }
+}
 
-while [[ true ]]; do
+async function ngeComment(session, id, text){
+  try {
+    await Client.Comment.create(session, id, text);
+    return true;
+  } catch(e){
+    return false;
+  }
+}
 
+async function ngeLike(session, id){
+  try{
+    await Client.Like.create(session, id)
+    return true;
+  } catch(e) {
+    return false;
+  }
+}
 
-for celeb in $(cat celeb_id); do
+const CommentAndLike = async function(session, accountId, text){
+  var result;
 
-data='{"_uuid":"'$guid'", "_uid":"'$username_id'", "user_id":"'$celeb'", "_csrftoken":"'$var2'"}'
-hmac=$(echo -n "$data" | openssl dgst -sha256 -hmac "${ig_sig}" | cut -d " " -f2)
-printf " \e[1;31m[\e[0m\e[1;77m+\e[0m\e[1;31m]\e[0m\e[1;93m Trying to follow celebgram %s ..." $celeb
+  const feed = new Client.Feed.UserMedia(session, accountId);
 
-check_follow=$(curl -s -L -b cookie.$user -d "ig_sig_key_version=4&signed_body=$hmac.$data" -s --user-agent 'User-Agent: "Instagram 10.26.0 Android (18/4.3; 320dpi; 720x1280; Xiaomi; HM 1SW; armani; qcom; en_US)"' -w "\n%{http_code}\n" -H "$header" "https://i.instagram.com/api/v1/friendships/create/$celeb/" | grep -o '"following": true')
+  try {
+    result = await feed.get();
+  } catch (err) {
+    return chalk`{bold.red ${err}}`;
+  }
 
-if [[ $check_follow == "a" ]]; then
-printf " \n\e[1;31m [!] Error\n"
-printf " \n\e[1;33m [::] There is problem in you instagram account\n"
-printf " \n\e[1;31m [:] Reason\n"
-printf " \n\e[1;33m - You have reached today's following/unfollowing limit of instagram\n."
-printf " \n\e[1;33m - You account is temporary banned by instagram\n"
-printf " \n\e[1;32m [:] Solution\n"
-printf " \n\e[1;33m - Don't follw or unfollow any in instagram for 24 hour then run script again it will work.\n"
+  if (result.length > 0) {
+    const task = [
+    ngefollow(session, accountId),
+    ngeComment(session, result[0].params.id, text),
+    ngeLike(session, result[0].params.id)
+    ]
+    const [Follow,Comment,Like] = await Promise.all(task);
+    const printFollow = Follow ? chalk`{green Follow}` : chalk`{red Follow}`;
+    const printComment = Comment ? chalk`{green Comment}` : chalk`{red Comment}`;
+    const printLike = Like ? chalk`{green Like}` : chalk`{red Like}`;
+    return chalk`{bold.green ${printFollow},${printComment},${printLike} [${text}]}`;
+  }
+  return chalk`{bold.white Timeline Kosong (SKIPPED)}`
+};
 
+const Followers = async function(session, id){
+  const feed = new Client.Feed.AccountFollowers(session, id);
+  try{
+    const Pollowers = [];
+    var cursor;
+    do {
+      if (cursor) feed.setCursor(cursor);
+      const getPollowers = await feed.get();
+      await Promise.all(getPollowers.map(async(akun) => {
+        Pollowers.push(akun.id);
+      }))
+      cursor = await feed.getCursor();
+    } while(feed.isMoreAvailable());
+    return Promise.resolve(Pollowers);
+  } catch(err){
+    return Promise.reject(err);
+  }
+}
+
+const Excute = async function(User, TargetUsername, Sleep, accountsPerDelay){
+  try {
+    console.log(chalk`{yellow \n [?] Try to Login . . .}`)
+    const doLogin = await Login(User);
+    console.log(chalk`{green  [!] Login Succsess, }{yellow [?] Try To Get ID & Followers Target . . .}`)
+    const getTarget = await Target(TargetUsername);
+    console.log(chalk`{green  [!] ${TargetUsername}: [${getTarget.id}] | Followers: [${getTarget.followers}]}`)
+    const getFollowers = await Followers(doLogin.session, doLogin.account.id)
+    console.log(chalk`{cyan  [?] Try to Follow, Comment, and Like Followers Target . . . \n}`)
+    const Targetfeed = new Client.Feed.AccountFollowers(doLogin.session, getTarget.id);
+    var TargetCursor;
+    do {
+      if (TargetCursor) Targetfeed.setCursor(TargetCursor);
+      var TargetResult = await Targetfeed.get();
+      TargetResult = _.chunk(TargetResult, accountsPerDelay);
+      for (let i = 0; i < TargetResult.length; i++) {
+        var timeNow = new Date();
+        timeNow = `${timeNow.getHours()}:${timeNow.getMinutes()}:${timeNow.getSeconds()}`
+        await Promise.all(TargetResult[i].map(async(akun) => {
+          if (!getFollowers.includes(akun.id) && akun.params.isPrivate === false) {
+	    var Text = fs.readFileSync('./commentText.txt', 'utf8').split('|');
+            var ranText = Text[Math.floor(Math.random() * Text.length)];
+            const ngeDo = await CommentAndLike(doLogin.session, akun.id, ranText)
+            console.log(chalk`[{magenta ${timeNow}}] {bold.green [>]}${akun.params.username} => ${ngeDo}`)
+          } else {
+            console.log(chalk`[{magenta ${timeNow}}] {bold.yellow [SKIP]}${akun.params.username} => PRIVATE OR ALREADY FOLLOWED`)
+          }
+        }));
+        console.log(chalk`{yellow \n [#][>][{cyan Account: ${User.username}}][{cyan Target: @${TargetUsername}}] Delay For ${Sleep} MiliSeconds [<][#] \n}`);
+        await delay(Sleep);
+      }
+      TargetCursor = await Targetfeed.getCursor();
+    } while(Targetfeed.isMoreAvailable());
+  } catch (err) {
+    console.log(err);
+  }
+}
+
+console.log(chalk`
+  {bold.cyan
+  —————————————————— [INFORMATION] ————————————————————
+  [?] {bold.green FFTauto | Using Account/User Target!}
+  ——————————————————  [THANKS TO]  ————————————————————
+  [✓] CODE BY CYBER SCREAMER CCOCOT (ccocot@bc0de.net)
+  [✓] FIXING & TESTING BY SYNTAX (@officialputu_id)
+  [✓] MODIFIED BY @mohsanjid X PhotoLooz
+  —————————————————————————————————————————————————————}
+      `);
+
+inquirer.prompt(User)
+.then(answers => {
+  Excute({
+    username:answers.username,
+    password:answers.password
+  },answers.target,answers.sleep,answers.accountsPerDelay);
+})
 exit 1
 else
 printf " \e[1;92mSuccess\e[0m\n"
